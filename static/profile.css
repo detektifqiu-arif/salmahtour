@@ -1,0 +1,224 @@
+/* CSS untuk Profile */
+body {
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.profile-body {
+    background-image: url('https://images.unsplash.com/photo-1592326871020-04f58c1a52f3?q=80&w=2265&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    color: #fff;
+    overflow-y: auto;
+}
+
+.profile-container {
+    max-width: 700px; /* Ukuran container lebih kecil */
+    margin: 30px auto;
+    background-color: rgba(0, 0, 0, 0.8);
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    color: #f1c40f;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.header h1 {
+    font-size: 28px;
+    color: #f1c40f;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.profile-info {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+.profile-photo {
+    margin-right: 20px;
+    flex-shrink: 0;
+}
+
+.photo-thumbnail {
+    width: 150px;
+    height: 200px;
+    object-fit: cover;
+    border-radius: 10px;
+    border: 2px solid #f39c12;
+}
+
+.profile-details {
+    flex-grow: 1;
+}
+
+.profile-details h2 {
+    font-size: 22px;
+    color: #ecf0f1;
+}
+
+.profile-details ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 10px 0;
+}
+
+.profile-details ul li {
+    margin-bottom: 10px;
+}
+
+.form-data {
+    margin: 20px 0;
+}
+
+.form-group {
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.form-group label {
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #ecf0f1;
+    text-align: left;
+}
+
+.form-group input,
+.form-group select {
+    width: 60%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #fff;
+    color: #2c3e50;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.form-group input::placeholder {
+    color: #7f8c8d;
+}
+
+.submit-button {
+    padding: 10px 15px;
+    background-color: #f39c12;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.submit-button:hover {
+    background-color: #d35400;
+}
+
+/* Section Info Rekening dengan background emas dan teks terpusat */
+.info-section {
+    margin-top: 30px;
+    text-align: center;
+    background-color: #f1c40f; /* Background emas */
+    padding: 20px;
+    border-radius: 10px;
+    color: #000; /* Tulisan hitam */
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    font-size: 16px;
+}
+
+.info-section p {
+    color: #2c3e50;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+.info-section a {
+    color: #2980b9;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.info-section a:hover {
+    text-decoration: underline;
+}
+
+ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+ul li {
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: #34495e;
+    border: 1px solid #7f8c8d;
+    border-radius: 5px;
+    position: relative; /* Untuk tombol hapus */
+}
+
+/* CSS untuk tombol Hapus Riwayat Pembayaran */
+.delete-button {
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.delete-button:hover {
+    background-color: #c0392b;
+}
+
+.footer {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.logout-button {
+    background-color: #e74c3c;
+    color: white;
+    padding: 10px 20px;
+    text-decoration: none;
+    border-radius: 5px;
+    display: inline-block;
+    margin-top: 20px;
+    font-weight: bold;
+}
+
+.logout-button:hover {
+    background-color: #c0392b;
+}
+
+@media (max-width: 768px) {
+    .profile-photo {
+        margin: 0 auto 15px;
+    }
+
+    .profile-info {
+        flex-direction: column;
+    }
+
+    .form-group input,
+    .form-group select {
+        width: 100%; /* Kolom menyesuaikan layar kecil */
+    }
+}
