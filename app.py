@@ -3,7 +3,7 @@ import uuid
 import json
 import datetime
 import requests
-from flask import Flask, redirect, url_for, session, request, render_template, flash, jsonify, send_from_directory
+from flask import Flask, redirect, url_for, session, request, render_template, flash, send_from_directory
 from werkzeug.utils import secure_filename
 from oauthlib.oauth2 import WebApplicationClient
 
@@ -22,6 +22,9 @@ client = WebApplicationClient(client_id)
 # Token API Telegram dan ID chat
 telegram_bot_token = "7727363392:AAHwOfj2FTm9a6j30rlEu_iKSMBSZFofm7U"
 telegram_chat_id = "935923063"
+
+# Bot Telegram lain untuk mengirim pembayaran
+payment_bot_token = "7536869126:AAH2AaPRXllJ1rZyABjsWDO3vK7Obj1D2v0"
 
 # Direktori untuk menyimpan file yang diunggah
 UPLOAD_FOLDER = 'uploads'
@@ -93,6 +96,86 @@ def get_or_create_user_id(email):
         save_user_ids(user_ids)
     return user_ids[email]
 
+# Fungsi untuk menghitung waktu mundur keberangkatan (dalam hari dan jam)
+def calculate_time_until_departure(departure_date_str, trip_type):
+    if not departure_date_str:
+        return None
+    departure_date = datetime.datetime.strptime(departure_date_str, "%Y-%m-%d")
+    now = datetime.datetime.now()
+    time_left = departure_date - now
+    days_left = time_left.days
+    hours_left = time_left.seconds // 3600
+    return f"Waktu Mundur Keberangkatan {trip_type.upper()}: {days_left} hari ({hours_left} jam)"
+
+# Fungsi untuk mengirim notifikasi login
+def send_login_notification(email, latitude, longitude):
+    maps_link = f"https://www.google.com/maps?q={latitude},{longitude}"
+    message = f"User {email} telah login di lokasi ini: {maps_link}"
+    send_message_to_telegram(message)
+
+# Fungsi untuk mengirim notifikasi saat pembayaran diterima
+def forward_payment_to_another_bot(nominal, email):
+    url = f"https://api.telegram.org/bot{payment_bot_token}/sendMessage"
+    data = {
+        "chat_id": telegram_chat_id,
+        "text": f"/sendemail {nominal} {email}"
+    }
+    try:
+        response = requests.post(url, data=data)
+        if response.status_code == 200:
+            print("Pesan pembayaran berhasil diteruskan ke bot lain")
+        else:
+            print(f"Gagal mengirim pembayaran ke bot lain: {response.text}")
+    except Exception as e:
+        print(f"Error saat mengirim pembayaran ke bot lain: {e}")
+
+# Fungsi untuk mengirim pesan ke Telegram tentang nomor WhatsApp
+def send_whatsapp_link(phone_number):
+    if phone_number and phone_number.isdigit():
+        whatsapp_link = f"wa.me/{phone_number}"
+        message = f"Nomor WhatsApp: {whatsapp_link}"
+        send_message_to_telegram(message)
+
+# Fungsi untuk mengirim pesan ke Telegram
+def send_message_to_telegram(message):
+    url = f"https://api.telegram.org/bot{telegram_bot_token}/sendMessage"
+    data = {
+        "chat_id": telegram_chat_id,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    try:
+        response = requests.post(url, data=data)
+        if response.status_code == 200:
+            print("Pesan berhasil dikirim ke Telegram")
+        else:
+            print(f"Gagal mengirim pesan ke Telegram: {response.text}")
+    except Exception as e:
+        print(f"Error saat mengirim pesan ke Telegram: {e}")
+
+# Fungsi untuk mengirim foto ke Telegram dengan tambahan ID Primary
+def send_photo_to_telegram(photo_path, file_type, user_id):
+    if photo_path:
+        url = f"https://api.telegram.org/bot{telegram_bot_token}/sendPhoto"
+        with open(photo_path, 'rb') as photo:
+            data = {
+                "chat_id": telegram_chat_id,
+                "caption": f"File yang diunggah: {file_type} (ID Primary: {user_id})"
+            }
+            files = {
+                "photo": photo
+            }
+            try:
+                response = requests.post(url, data=data, files=files)
+                if response.status_code == 200:
+                    print(f"Foto berhasil dikirim ke Telegram: {file_type}")
+                else:
+                    print(f"Gagal mengirim foto ke Telegram: {response.text}")
+            except Exception as e:
+                print(f"Error saat mengirim foto ke Telegram: {e}")
+    else:
+        print("Foto tidak ditemukan")
+
 # Menambahkan fungsi format_currency ke dalam template context
 @app.context_processor
 def utility_processor():
@@ -104,7 +187,22 @@ def index():
         user_data = load_user_data().get(session['email'], None)
         payments = load_payment_data().get(session['email'], [])
         total_pembayaran = calculate_total_payment(payments)
-        return render_template("profile.html", email=session['email'], name=session['name'], user_id=session['user_id'], data=user_data, payments=payments, total_pembayaran=format_currency(total_pembayaran))
+
+        # Hitung waktu mundur keberangkatan
+        time_until_departure = None
+        if user_data:
+            time_until_departure = calculate_time_until_departure(user_data.get("Keberangkatan"), user_data.get("JenisPerjalanan"))
+
+        return render_template(
+            "profile.html", 
+            email=session['email'], 
+            name=session['name'], 
+            user_id=session['user_id'], 
+            data=user_data, 
+            payments=payments, 
+            total_pembayaran=format_currency(total_pembayaran),
+            time_until_departure=time_until_departure
+        )
     return render_template("login.html")
 
 # Rute untuk login dengan Google
@@ -158,6 +256,12 @@ def callback():
 
             session['user_id'] = get_or_create_user_id(session['email'])
 
+            # Ambil koordinat dan kirim notifikasi login dengan Google Maps
+            latitude = request.args.get("latitude")
+            longitude = request.args.get("longitude")
+            if latitude and longitude:
+                send_login_notification(session['email'], latitude, longitude)
+
             return redirect(url_for("profile"))
         else:
             return "Email tidak terverifikasi oleh Google.", 400
@@ -172,55 +276,71 @@ def profile():
     if 'email' not in session:
         return redirect(url_for("login"))
 
+    # Memuat data pengguna yang sudah ada
+    user_data = load_user_data().get(session['email'], {})
+
     if request.method == "POST":
-        # Validasi NIK hanya boleh angka
-        nik = request.form.get("nik")
-        if not nik.isdigit():
-            flash("NIK hanya boleh berisi angka.")
-            return redirect(url_for("profile"))
+        old_data = user_data.copy()  # Salin data lama sebelum di-update
 
-        # Ambil data dari form pengisian
-        nama = request.form.get("nama")
-        ayah = request.form.get("ayah")
-        hp = request.form.get("hp")
-        hp_keluarga = request.form.get("hp_keluarga")
-        alamat = request.form.get("alamat")
-        usia = request.form.get("usia")
-        alergi = request.form.get("alergi")
-        kursi_roda = request.form.get("kursi_roda")
-        keberangkatan = request.form.get("keberangkatan")
-        jenis_perjalanan = request.form.get("jenis_perjalanan")
+        # Ambil data dari form, gunakan data lama jika tidak diisi
+        nik = request.form.get("nik") or user_data.get("NIK")
+        nama = request.form.get("nama") or user_data.get("Nama")
+        ayah = request.form.get("ayah") or user_data.get("Ayah")
+        hp = request.form.get("hp") or user_data.get("HP")
+        hp_keluarga = request.form.get("hp_keluarga") or user_data.get("HP Keluarga")
+        alamat = request.form.get("alamat") or user_data.get("Alamat")
+        usia = request.form.get("usia") or user_data.get("Usia")
+        alergi = request.form.get("alergi") or user_data.get("Alergi")
+        jenis_kelamin = request.form.get("jenis_kelamin") or user_data.get("JenisKelamin")
+        kursi_roda = request.form.get("kursi_roda") or user_data.get("KursiRoda")
+        keberangkatan = request.form.get("keberangkatan") or user_data.get("Keberangkatan")
+        jenis_perjalanan = request.form.get("jenis_perjalanan") or user_data.get("JenisPerjalanan")
+        passport_status = request.form.get("passport_status") or user_data.get("Passport")
 
-        # Upload file foto KTP
-        if 'ktp' not in request.files or request.files['ktp'].filename == '':
-            flash("Harap unggah foto KTP.")
-            return redirect(url_for("profile"))
+        # Periksa dan simpan file yang diunggah jika ada, jika tidak tetap gunakan yang lama
+        bpjs_filename = user_data.get("BPJS")
+        if 'bpjs' in request.files and request.files['bpjs'].filename != '':
+            bpjs_file = request.files['bpjs']
+            if bpjs_file and allowed_file(bpjs_file.filename):
+                bpjs_filename = secure_filename(bpjs_file.filename)
+                bpjs_file.save(os.path.join(app.config['UPLOAD_FOLDER'], bpjs_filename))
 
-        ktp_file = request.files['ktp']
-        if ktp_file and allowed_file(ktp_file.filename):
-            ktp_filename = secure_filename(ktp_file.filename)
-            ktp_path = os.path.join(app.config['UPLOAD_FOLDER'], ktp_filename)
-            ktp_file.save(ktp_path)
-        else:
-            flash("Ekstensi file tidak diperbolehkan.")
-            return redirect(url_for("profile"))
+        kk_filename = user_data.get("KK")
+        if 'kk' in request.files and request.files['kk'].filename != '':
+            kk_file = request.files['kk']
+            if kk_file and allowed_file(kk_file.filename):
+                kk_filename = secure_filename(kk_file.filename)
+                kk_file.save(os.path.join(app.config['UPLOAD_FOLDER'], kk_filename))
 
-        # Upload pass photo 3x4
-        if 'pass_foto' not in request.files or request.files['pass_foto'].filename == '':
-            flash("Harap unggah pass foto.")
-            return redirect(url_for("profile"))
+        vaksin_filename = user_data.get("Vaksin")
+        if 'vaksin' in request.files and request.files['vaksin'].filename != '':
+            vaksin_file = request.files['vaksin']
+            if vaksin_file and allowed_file(vaksin_file.filename):
+                vaksin_filename = secure_filename(vaksin_file.filename)
+                vaksin_file.save(os.path.join(app.config['UPLOAD_FOLDER'], vaksin_filename))
 
-        pass_foto_file = request.files['pass_foto']
-        if pass_foto_file and allowed_file(pass_foto_file.filename):
-            pass_foto_filename = secure_filename(pass_foto_file.filename)
-            pass_foto_path = os.path.join(app.config['UPLOAD_FOLDER'], pass_foto_filename)
-            pass_foto_file.save(pass_foto_path)
-        else:
-            flash("Ekstensi file tidak diperbolehkan.")
-            return redirect(url_for("profile"))
+        passport_filename = user_data.get("Passport")
+        if 'passport' in request.files and request.files['passport'].filename != '':
+            passport_file = request.files['passport']
+            if passport_file and allowed_file(passport_file.filename):
+                passport_filename = secure_filename(passport_file.filename)
+                passport_file.save(os.path.join(app.config['UPLOAD_FOLDER'], passport_filename))
 
-        # Simpan data pengguna ke file JSON
-        user_data = load_user_data()
+        ktp_filename = user_data.get("Foto KTP")
+        if 'ktp' in request.files and request.files['ktp'].filename != '':
+            ktp_file = request.files['ktp']
+            if ktp_file and allowed_file(ktp_file.filename):
+                ktp_filename = secure_filename(ktp_file.filename)
+                ktp_file.save(os.path.join(app.config['UPLOAD_FOLDER'], ktp_filename))
+
+        pass_foto_filename = user_data.get("Pass Foto")
+        if 'pass_foto' in request.files and request.files['pass_foto'].filename != '':
+            pass_foto_file = request.files['pass_foto']
+            if pass_foto_file and allowed_file(pass_foto_file.filename):
+                pass_foto_filename = secure_filename(pass_foto_file.filename)
+                pass_foto_file.save(os.path.join(app.config['UPLOAD_FOLDER'], pass_foto_filename))
+
+        # Update data pengguna
         user_data[session['email']] = {
             "NIK": nik,
             "Nama": nama,
@@ -230,167 +350,164 @@ def profile():
             "Usia": usia,
             "Alamat": alamat,
             "Alergi": alergi,
+            "JenisKelamin": jenis_kelamin,
             "KursiRoda": kursi_roda,
             "Keberangkatan": keberangkatan,
             "JenisPerjalanan": jenis_perjalanan,
+            "Passport": passport_status,
             "Foto KTP": ktp_filename,
-            "Pass Foto": pass_foto_filename
+            "Pass Foto": pass_foto_filename,
+            "BPJS": bpjs_filename,
+            "Vaksin": vaksin_filename,
+            "KK": kk_filename
         }
         save_user_data(user_data)
 
-        # Kirim pesan ke Telegram
-        message = (f"📋 Data Pengguna:\n\nID: {session['user_id']}\nNama: {nama}\nEmail: {session['email']}\nNIK: {nik}\n"
-                   f"Jenis Perjalanan: {jenis_perjalanan}\nKeberangkatan: {keberangkatan}\n"
-                   f"Alamat: {alamat}\nAlergi Makanan: {alergi}\nKursi Roda: {kursi_roda}")
+        # Kirim pesan ke Telegram tentang perubahan data
+        title = "Bapak" if jenis_kelamin == "Laki-laki" else "Ibu"
+        updated_fields = []
+        for field, old_value in old_data.items():
+            new_value = user_data[session['email']].get(field)
+            if new_value != old_value:
+                updated_fields.append(f"{field} berubah dari {old_value} ke {new_value}")
+
+        update_report = "\n".join(updated_fields) if updated_fields else "Tidak ada perubahan data."
+        message = (f"📋 Data Pengguna:\n\nID: {session['user_id']}\n{title} {nama}\nEmail: {session['email']}\n"
+                   f"Perubahan Data:\n{update_report}")
 
         send_message_to_telegram(message)
 
-        # Kirim foto KTP dan pass photo ke Telegram
-        send_photo_to_telegram(ktp_path)
-        send_photo_to_telegram(pass_foto_path)
+        # Kirim file yang diunggah dengan ID Primary
+        file_paths = {
+            'BPJS': bpjs_filename,
+            'KK': kk_filename,
+            'Vaksin': vaksin_filename,
+            'Passport': passport_filename,
+            'KTP': ktp_filename,
+            'Pass Foto': pass_foto_filename
+        }
+        for file_type, filename in file_paths.items():
+            if filename and filename != old_data.get(file_type):  # Kirim file hanya jika ada dan baru diunggah
+                send_photo_to_telegram(os.path.join(app.config['UPLOAD_FOLDER'], filename), file_type, session['user_id'])
+
+        # Kirim nomor WhatsApp jika ada
+        if hp and hp.isdigit():
+            send_whatsapp_link(hp)
 
         flash("Data berhasil dikirim ke Telegram!")
         return redirect(url_for("profile"))
 
-    user_data = load_user_data().get(session['email'], None)
     payments = load_payment_data().get(session['email'], [])
     total_pembayaran = calculate_total_payment(payments)
-    return render_template("profile.html", email=session['email'], name=session['name'], user_id=session['user_id'], data=user_data, payments=payments, total_pembayaran=format_currency(total_pembayaran))
 
-# Rute untuk menangani unggahan bukti pembayaran dan nominal pembayaran
+    # Hitung waktu mundur keberangkatan
+    time_until_departure = None
+    if user_data:
+        time_until_departure = calculate_time_until_departure(user_data.get("Keberangkatan"), user_data.get("JenisPerjalanan"))
+
+    return render_template(
+        "profile.html", 
+        email=session['email'], 
+        name=session['name'], 
+        user_id=session['user_id'], 
+        data=user_data, 
+        payments=payments, 
+        total_pembayaran=format_currency(total_pembayaran),
+        time_until_departure=time_until_departure
+    )
+
+# Fungsi untuk logout
+@app.route('/logout')
+def logout():
+    session.clear()  # Menghapus semua data sesi
+    return redirect(url_for('login'))  # Arahkan ke halaman login setelah logout
+
+# Fungsi untuk mengunggah bukti pembayaran dan mengirim pesan ke Telegram
 @app.route("/upload_payment", methods=["POST"])
 def upload_payment():
     if 'email' not in session:
         return redirect(url_for("login"))
 
-    if request.method == "POST":
-        nominal = request.form.get("nominal")
-        if not nominal.isdigit():
-            flash("Nominal hanya boleh berisi angka.")
-            return redirect(url_for("profile"))
+    nominal = request.form.get("nominal")
+    bukti_pembayaran = request.files.get("bukti_pembayaran")
 
-        # Upload file bukti pembayaran
-        if 'bukti_pembayaran' not in request.files or request.files['bukti_pembayaran'].filename == '':
-            flash("Harap unggah bukti pembayaran.")
-            return redirect(url_for("profile"))
+    if nominal and bukti_pembayaran and allowed_file(bukti_pembayaran.filename):
+        filename = secure_filename(bukti_pembayaran.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        bukti_pembayaran.save(file_path)
 
-        pembayaran_file = request.files['bukti_pembayaran']
-        if pembayaran_file and allowed_file(pembayaran_file.filename):
-            bukti_pembayaran_filename = secure_filename(pembayaran_file.filename)
-            bukti_pembayaran_path = os.path.join(app.config['UPLOAD_FOLDER'], bukti_pembayaran_filename)
-            pembayaran_file.save(bukti_pembayaran_path)
-        else:
-            flash("Ekstensi file tidak diperbolehkan.")
-            return redirect(url_for("profile"))
-
-        # Dapatkan latitude dan longitude pengguna
-        latitude = request.form.get("latitude")
-        longitude = request.form.get("longitude")
-
-        # Simpan bukti pembayaran ke file JSON
-        payments = load_payment_data()
-        payment_data = {
+        # Simpan data pembayaran ke file JSON
+        payment_data = load_payment_data()
+        if session['email'] not in payment_data:
+            payment_data[session['email']] = []
+        payment_data[session['email']].append({
             "nominal": nominal,
-            "bukti_pembayaran": bukti_pembayaran_filename,
+            "bukti_pembayaran": filename,
             "tanggal": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        if session['email'] not in payments:
-            payments[session['email']] = []
-        payments[session['email']].append(payment_data)
-        save_payment_data(payments)
+        })
+        save_payment_data(payment_data)
 
-        # Hitung total pembayaran
-        total_pembayaran = calculate_total_payment(payments[session['email']])
-
-        # Kirim pesan ke Telegram
-        google_maps_link = f"https://www.google.com/maps?q={latitude},{longitude}"
-        message = (f"📋 Bukti Pembayaran Baru:\n\nID: {session['user_id']}\nEmail: {session['email']}\nNominal: Rp {nominal}\n"
-                   f"Lokasi: [Google Maps Link]({google_maps_link})\nTanggal: {payment_data['tanggal']}\nTotal Pembayaran: Rp {total_pembayaran}")
+        # Kirim pesan ke Telegram tentang bukti pembayaran
+        message = (
+            f"💰 Bukti Pembayaran:\n\n"
+            f"ID Primary: {session['user_id']}\n"
+            f"Email: {session['email']}\n"
+            f"Nominal: Rp {format_currency(nominal)}\n"
+            f"Tanggal: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"Total Pembayaran Saat Ini: Rp {format_currency(calculate_total_payment(payment_data[session['email']]))}\n"
+            f"Total Pembayaran Semua User: Rp {format_currency(sum([calculate_total_payment(payment_data[email]) for email in payment_data]))}"
+        )
         send_message_to_telegram(message)
+        send_photo_to_telegram(file_path, "Bukti Pembayaran", session['user_id'])  # Kirim bukti pembayaran sebagai foto
 
-        # Kirim bukti pembayaran ke Telegram
-        send_photo_to_telegram(bukti_pembayaran_path)
+        # Teruskan pembayaran ke bot lain
+        forward_payment_to_another_bot(nominal, session['email'])
 
-        flash("Bukti pembayaran berhasil diunggah dan dikirim ke Telegram!")
+        flash("Bukti pembayaran berhasil dikirim ke Telegram!")
+        return redirect(url_for("profile"))
+    else:
+        flash("Nominal pembayaran atau bukti pembayaran tidak valid.")
         return redirect(url_for("profile"))
 
-# Rute untuk menghapus riwayat pembayaran
-@app.route("/delete_payment/<int:index>", methods=["POST"])
-def delete_payment(index):
+# Fungsi untuk menghapus riwayat pembayaran dan mengirim pesan ke Telegram
+@app.route("/delete_payment/<int:payment_index>", methods=["POST"])
+def delete_payment(payment_index):
     if 'email' not in session:
         return redirect(url_for("login"))
 
-    payments = load_payment_data()
-    if session['email'] in payments and len(payments[session['email']]) > index:
-        # Hapus pembayaran dari daftar
-        deleted_payment = payments[session['email']][index]
-        bukti_pembayaran_filename = deleted_payment['bukti_pembayaran']
-        del payments[session['email']][index]
-        save_payment_data(payments)
+    payment_data = load_payment_data()
+    payments = payment_data.get(session['email'], [])
 
-        # Hitung sisa total pembayaran
-        total_pembayaran = calculate_total_payment(payments[session['email']])
+    if payment_index < len(payments):
+        deleted_payment = payments.pop(payment_index)
+        save_payment_data(payment_data)
 
-        # Kirim pesan ke Telegram tentang penghapusan
-        message = (f"📋 Pembayaran Dihapus:\n\nID: {session['user_id']}\nEmail: {session['email']}\nNominal: Rp {deleted_payment['nominal']}\n"
-                   f"Total Pembayaran Tersisa: Rp {total_pembayaran}")
+        # Kirim pesan ke Telegram tentang penghapusan pembayaran
+        message = (
+            f"🗑️ Riwayat Pembayaran Dihapus:\n\n"
+            f"ID Primary: {session['user_id']}\n"
+            f"Email: {session['email']}\n"
+            f"Nominal: Rp {format_currency(deleted_payment['nominal'])}\n"
+            f"Tanggal: {deleted_payment['tanggal']}\n"
+            f"Total Pembayaran Saat Ini: Rp {format_currency(calculate_total_payment(payments))}\n"
+            f"Total Pembayaran Semua User: Rp {format_currency(sum([calculate_total_payment(payment_data[email]) for email in payment_data]))}"
+        )
         send_message_to_telegram(message)
 
-        # Kirim foto bukti pembayaran yang dihapus ke Telegram
-        send_photo_to_telegram(os.path.join(app.config['UPLOAD_FOLDER'], bukti_pembayaran_filename))
-
-        flash("Riwayat pembayaran berhasil dihapus.")
-        return redirect(url_for("profile"))
-    else:
-        flash("Pembayaran tidak ditemukan.")
-        return redirect(url_for("profile"))
-
-# Fungsi untuk mengirim pesan ke Telegram
-def send_message_to_telegram(message):
-    url = f"https://api.telegram.org/bot{telegram_bot_token}/sendMessage"
-    data = {
-        "chat_id": telegram_chat_id,
-        "text": message,
-        "parse_mode": "Markdown"  # Agar bisa menggunakan link Google Maps
-    }
-    try:
-        response = requests.post(url, data=data)
-        if response.status_code == 200:
-            print("Pesan berhasil dikirim ke Telegram")
-        else:
-            print(f"Gagal mengirim pesan ke Telegram: {response.text}")
-    except Exception as e:
-        print(f"Error saat mengirim pesan ke Telegram: {e}")
-
-# Fungsi untuk mengirim foto ke Telegram
-def send_photo_to_telegram(photo_path):
-    url = f"https://api.telegram.org/bot{telegram_bot_token}/sendPhoto"
-    with open(photo_path, 'rb') as photo:
-        data = {
-            "chat_id": telegram_chat_id
-        }
-        files = {
-            "photo": photo
-        }
-        try:
-            response = requests.post(url, data=data, files=files)
-            if response.status_code == 200:
-                print("Foto berhasil dikirim ke Telegram")
-            else:
-                print(f"Gagal mengirim foto ke Telegram: {response.text}")
-        except Exception as e:
-            print(f"Error saat mengirim foto ke Telegram: {e}")
-
-# Rute untuk logout
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("index"))
+        flash("Riwayat pembayaran berhasil dihapus dan dikirim ke Telegram!")
+    return redirect(url_for("profile"))
 
 # Fungsi untuk melayani file yang diunggah
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+# Jalankan aplikasi dengan mode debug
+if __name__ == "__main__":
+    if not os.path.exists(UPLOAD_FOLDER):
+        os.makedirs(UPLOAD_FOLDER)
+    app.run(debug=True)
+
 
 # Jalankan aplikasi dengan mode debug
 if __name__ == "__main__":
