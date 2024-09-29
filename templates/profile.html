@@ -3,16 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Profile - Jamaah Umroh Salmah Gresik</title>
+    <title>Profile - Jamaah Salmah Gresik</title>
     <link rel="stylesheet" href="/static/profile.css">
 </head>
 <body class="profile-body">
     <div class="profile-container">
         <header class="header">
-            <h1>Jamaah Umroh Salmah Gresik</h1>
+            <h1>JAMA'AH YPI ROUDLOTUL ANWAR AL ASYARI</h1>
         </header>
 
         <div class="profile-content">
+            <!-- Menampilkan waktu mundur keberangkatan -->
+            {% if time_until_departure %}
+            <div class="countdown-container" style="text-align: center; font-size: 2em; color: white;">
+                <h3>{{ time_until_departure }}</h3>
+            </div>
+            {% endif %}
+
             <div class="profile-info">
                 <div class="profile-photo">
                     {% if data and data['Pass Foto'] %}
@@ -23,23 +30,59 @@
                 </div>
 
                 <div class="profile-details">
-                    <h2>Selamat Datang, {{ name }}!</h2>
+                    <h2>Selamat Datang, {% if data and data['JenisKelamin'] == 'Laki-laki' %}Bapak{% else %}Ibu{% endif %} {{ name }}!</h2>
                     <p><strong>Email:</strong> {{ email }}</p>
                     <p><strong>ID Primary:</strong> {{ user_id }}</p>
                     <h3>Data Diri:</h3>
                     {% if data %}
                     <ul>
-                        <li><strong>NIK:</strong> {{ data['NIK'] }}</li>
-                        <li><strong>Nama:</strong> {{ data['Nama'] }}</li>
-                        <li><strong>Nama Ayah:</strong> {{ data['Ayah'] }}</li>
-                        <li><strong>Nomor HP:</strong> {{ data['HP'] }}</li>
-                        <li><strong>Nomor HP Keluarga:</strong> {{ data['HP Keluarga'] }}</li>
-                        <li><strong>Usia:</strong> {{ data['Usia'] }}</li>
-                        <li><strong>Alamat:</strong> {{ data['Alamat'] }}</li>
-                        <li><strong>Alergi Makanan:</strong> {{ data['Alergi'] }}</li>
-                        <li><strong>Kursi Roda atau Alat Bantu Dengar:</strong> {{ data['KursiRoda'] }}</li>
-                        <li><strong>Jenis Perjalanan:</strong> {{ data['JenisPerjalanan'] }}</li>
-                        <li><strong>Keberangkatan:</strong> {{ data['Keberangkatan'] }}</li>
+                        <li><strong>NIK:</strong> {{ data['NIK'] or 'Belum diisi' }}</li>
+                        <li><strong>Nama:</strong> {{ data['Nama'] or 'Belum diisi' }}</li>
+                        <li><strong>Jenis Kelamin:</strong> {{ data['JenisKelamin'] or 'Belum diisi' }}</li>
+                        <li><strong>Nama Ayah:</strong> {{ data['Ayah'] or 'Belum diisi' }}</li>
+                        <li><strong>Nomor HP:</strong> {{ data['HP'] or 'Belum diisi' }}</li>
+                        <li><strong>Nomor HP Keluarga:</strong> {{ data['HP Keluarga'] or 'Belum diisi' }}</li>
+                        <li><strong>Usia:</strong> {{ data['Usia'] or 'Belum diisi' }}</li>
+                        <li><strong>Alamat:</strong> {{ data['Alamat'] or 'Belum diisi' }}</li>
+                        <li><strong>Alergi Makanan:</strong> {{ data['Alergi'] or 'Belum diisi' }}</li>
+                        <li><strong>Kursi Roda:</strong> {{ data['KursiRoda'] or 'Belum diisi' }}</li>
+                        <li><strong>Jenis Perjalanan:</strong> {{ data['JenisPerjalanan'] or 'Belum diisi' }}</li>
+                        <li><strong>Keberangkatan:</strong> {{ data['Keberangkatan'] or 'Belum diisi' }}</li>
+                        <li><strong>Status Passport:</strong> 
+                            {% if data['Passport'] == "Sudah Punya" %}
+                                Sudah Punya
+                            {% else %}
+                                Belum Punya (Upload ijazah terakhir/surat nikah/akta kelahiran)
+                            {% endif %}
+                        </li>
+                        <li><strong>BPJS:</strong> 
+                            {% if data['BPJS'] %}
+                                <span style="color: green;">Sudah diunggah</span>
+                            {% else %}
+                                <span style="color: red;">Belum diunggah</span>
+                            {% endif %}
+                        </li>
+                        <li><strong>KTP:</strong> 
+                            {% if data['Foto KTP'] %}
+                                <span style="color: green;">Sudah diunggah</span>
+                            {% else %}
+                                <span style="color: red;">Belum diunggah</span>
+                            {% endif %}
+                        </li>
+                        <li><strong>Vaksin:</strong> 
+                            {% if data['Vaksin'] %}
+                                <span style="color: green;">Sudah diunggah</span>
+                            {% else %}
+                                <span style="color: red;">Belum diunggah</span>
+                            {% endif %}
+                        </li>
+                        <li><strong>KK:</strong> 
+                            {% if data['KK'] %}
+                                <span style="color: green;">Sudah diunggah</span>
+                            {% else %}
+                                <span style="color: red;">Belum diunggah</span>
+                            {% endif %}
+                        </li>
                     </ul>
                     {% else %}
                     <p>Data profil belum lengkap.</p>
@@ -48,40 +91,48 @@
             </div>
 
             <h2>Pengisian Data Umroh</h2>
-            <form action="/profile" method="POST" enctype="multipart/form-data" class="form-data">
+            <form action="/profile" method="POST" enctype="multipart/form-data" class="form-data" id="umrohForm">
                 <div class="form-group">
                     <label for="nik">NIK (Nomor Induk Kependudukan)</label>
-                    <input type="number" id="nik" name="nik" required>
+                    <input type="number" id="nik" name="nik">
                 </div>
 
                 <div class="form-group">
                     <label for="nama">Nama Lengkap</label>
-                    <input type="text" id="nama" name="nama" required>
+                    <input type="text" id="nama" name="nama">
                 </div>
 
                 <div class="form-group">
                     <label for="ayah">Nama Ayah Kandung</label>
-                    <input type="text" id="ayah" name="ayah" required>
+                    <input type="text" id="ayah" name="ayah">
+                </div>
+
+                <div class="form-group">
+                    <label for="jenis_kelamin">Jenis Kelamin</label>
+                    <select id="jenis_kelamin" name="jenis_kelamin">
+                        <option value="Laki-laki">Laki-laki</option>
+                        <option value="Wanita">Wanita</option>
+                    </select>
                 </div>
 
                 <div class="form-group">
                     <label for="hp">Nomor HP</label>
-                    <input type="number" id="hp" name="hp" required>
+                    <input type="number" id="hp" name="hp">
                 </div>
 
                 <div class="form-group">
                     <label for="hp_keluarga">Nomor Telepon Keluarga (Darurat)</label>
-                    <input type="number" id="hp_keluarga" name="hp_keluarga" required>
+                    <input type="number" id="hp_keluarga" name="hp_keluarga">
                 </div>
 
                 <div class="form-group">
                     <label for="usia">Usia</label>
-                    <input type="number" id="usia" name="usia" required>
+                    <input type="number" id="usia" name="usia">
                 </div>
 
                 <div class="form-group">
                     <label for="alamat">Alamat Lengkap</label>
-                    <input type="text" id="alamat" name="alamat" required>
+                    <input type="text" id="alamat" name="alamat">
                 </div>
 
                 <div class="form-group">
@@ -91,7 +142,7 @@
 
                 <div class="form-group">
                     <label for="kursi_roda">Membutuhkan Kursi Roda atau Alat Bantu Dengar?</label>
-                    <select id="kursi_roda" name="kursi_roda" required>
+                    <select id="kursi_roda" name="kursi_roda">
                         <option value="Tidak">Tidak</option>
                         <option value="Ya">Ya</option>
                     </select>
@@ -99,34 +150,68 @@
 
                 <div class="form-group">
                     <label for="jenis_perjalanan">Jenis Perjalanan</label>
-                    <select id="jenis_perjalanan" name="jenis_perjalanan" required>
+                    <select id="jenis_perjalanan" name="jenis_perjalanan">
                         <option value="Umroh">Umroh</option>
                         <option value="Haji">Haji</option>
                     </select>
                 </div>
 
                 <div class="form-group">
-                    <label for="keberangkatan">Tanggal Keberangkatan( klik gambar kalender sebelah kanan)</label>
-                    <input type="date" id="keberangkatan" name="keberangkatan" required>
+                    <label for="keberangkatan">Tanggal Keberangkatan (klik gambar kalender sebelah kanan)</label>
+                    <input type="date" id="keberangkatan" name="keberangkatan">
+                </div>
+
+                <div class="form-group">
+                    <label for="passport_status">Status Passport</label>
+                    <select id="passport_status" name="passport_status">
+                        <option value="Sudah Punya">Sudah Punya</option>
+                        <option value="Belum Punya">Belum Punya</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="passport_file_upload" style="display:none;">
+                    <label for="passport">Unggah Salah satu  ijazah terahir/akte kelahiran/surat nikah</label>
+                    <input type="file" id="passport" name="passport" accept="image/*">
                 </div>
 
                 <div class="form-group">
                     <label for="ktp">Unggah Foto KTP</label>
-                    <input type="file" id="ktp" name="ktp" accept="image/*" required>
+                    <input type="file" id="ktp" name="ktp" accept="image/*">
                 </div>
 
                 <div class="form-group">
                     <label for="pass_foto">Unggah Foto 3x4 (Pass Photo)</label>
-                    <input type="file" id="pass_foto" name="pass_foto" accept="image/*" required>
+                    <input type="file" id="pass_foto" name="pass_foto" accept="image/*">
+                </div>
+
+                <div class="form-group">
+                    <label for="bpjs">Unggah BPJS/KIS</label>
+                    <input type="file" id="bpjs" name="bpjs" accept="image/*">
+                </div>
+
+                <div class="form-group">
+                    <label for="vaksin">Unggah Sertifikat Vaksin</label>
+                    <input type="file" id="vaksin" name="vaksin" accept="image/*">
+                </div>
+
+                <div class="form-group">
+                    <label for="kk">Unggah Kartu Keluarga (KK)</label>
+                    <input type="file" id="kk" name="kk" accept="image/*">
                 </div>
 
                 <button type="submit" class="submit-button">Kirim Data</button>
             </form>
 
+            <div id="updateSection" style="display: none;">
+                <h2>Update Data Diri</h2>
+                <p>Update data diri Anda dengan menekan tombol di bawah ini.</p>
+                <button id="showFormButton" style="background-color: yellow; color: black; padding: 10px 20px; border-radius: 8px; font-size: 1em; font-weight: bold;">Update Data Diri</button>
+            </div>
+
             <h2>Pembayaran</h2>
-            <form action="/upload_payment" method="POST" enctype="multipart/form-data" class="form-payment">
+            <form action="/upload_payment" method="POST" enctype="multipart/form-data" class="form-payment" style="background-color: #C0C0C0; border: 1px solid white; padding: 20px; border-radius: 10px;">
                 <div class="form-group">
-                    <label for="nominal">Nominal Pembayaran</label>
+                    <label for="nominal">Nominal Pembayaran <span style="color:red;">(wajib diisi)</span></label>
                     <input type="number" id="nominal" name="nominal" required>
                 </div>
 
@@ -147,8 +232,8 @@
             <ul>
                 {% for payment in payments %}
                 <li>
-                    <strong>Nominal:</strong> Rp {{ format_currency(payment.nominal) }}<br>
-                    <strong>Bukti Pembayaran:</strong> <a href="/uploads/{{ payment.bukti_pembayaran }}" target="_blank">Lihat Bukti</a><br>
+                    <strong>Nominal:</strong> <span style="color:rgb(245, 236, 236); font-weight:bold;">Rp {{ format_currency(payment.nominal) }}</span><br>
+                    <strong>Bukti Pembayaran:</strong> <a href="/uploads/{{ payment.bukti_pembayaran }}" target="_blank" style="color: rgb(7, 165, 238); font-weight:bold;">Lihat Bukti</a><br>
                     <strong>Tanggal:</strong> {{ payment.tanggal }}
                     <form action="/delete_payment/{{ loop.index0 }}" method="POST" style="display:inline;">
                         <button type="submit" class="delete-button">Hapus</button>
@@ -156,16 +241,15 @@
                 </li>
                 {% endfor %}
             </ul>
-            <h3><strong>Total Pembayaran:</strong> Rp {{ total_pembayaran }}</h3>
+            <h3><strong>Total Pembayaran:</strong> <span style="color: rgb(248, 245, 245); font-weight:bold;">Rp {{ total_pembayaran }}</span></h3>
             {% else %}
             <p>Belum ada riwayat pembayaran.</p>
             {% endif %}
 
-            <div class="info-section">
-                <p>Nomor Rekening untuk Pembayaran: <strong>5112222512 A.N PT Madani Alam Semesta (Bank BSI)</strong></p>
-                <p>Untuk informasi lebih lanjut, kunjungi: <a href="https://salmahtour.my.id/" target="_blank">salmahtour.my.id</a></p>
-                <p>Email: <a href="mailto:salmahtour99@gmail.com">salmahtour99@gmail.com</a></p>
-                <p>Alamat: Jl. Jawa No 38 B, Gresik Kota Baru, Yosowilangun, Kec. Manyar, Kab. Gresik, Jawa Timur, 61151</p>
+            <div class="info-section" style="background-color: yellow; padding: 20px; border-radius: 10px;">
+                <p>Nomor Rekening untuk Pembayaran: <strong>5889999588 A.N PT YPI ROUDLOTUL ANWAR AL ASYARI (Bank BSI) </strong></p>
+                                <p>Alamat: Jl. jL SYARIF RT 007 RW 002 NO 38 TAMBAK OSO WARU SIDOARJO</p>
+                <p><a href="https://wa.me/6281216801863" target="_blank"><img src="https://png.pngtree.com/png-vector/20230225/ourmid/pngtree-whatsapp-icon-png-image_6618451.png" alt="Hubungi CS" style="width: 40px; height: 40px;"></a></p>
             </div>
         </div>
 
@@ -184,6 +268,33 @@
         } else {
             alert("Geolocation tidak didukung oleh browser ini.");
         }
+
+        // Tampilkan field upload passport hanya jika status passport "Belum Punya"
+        document.getElementById("passport_status").addEventListener("change", function() {
+            var passportField = document.getElementById("passport_file_upload");
+            if (this.value === "Belum Punya") {
+                passportField.style.display = "block";
+            } else {
+                passportField.style.display = "none";
+            }
+        });
+
+        // Fungsi untuk menyembunyikan form pengisian data setelah diisi
+        const umrohForm = document.getElementById("umrohForm");
+        const updateSection = document.getElementById("updateSection");
+        const showFormButton = document.getElementById("showFormButton");
+
+        // Cek apakah form sudah diisi dan sembunyikan jika sudah
+        if ("{{ data }}") {
+            umrohForm.style.display = "none";
+            updateSection.style.display = "block";
+        }
+
+        // Tampilkan form kembali ketika klik "Update Data Diri"
+        showFormButton.addEventListener("click", function() {
+            umrohForm.style.display = "block";
+            updateSection.style.display = "none";
+        });
     </script>
 </body>
 </html>
