@@ -3,6 +3,9 @@ body {
     font-family: 'Arial', sans-serif;
     margin: 0;
     padding: 0;
+    -webkit-user-select: none; /* Cegah zoom di mobile */
+    -webkit-touch-callout: none; /* Cegah zoom di mobile */
+    touch-action: manipulation; /* Cegah zoom di mobile */
 }
 
 .profile-body {
@@ -33,6 +36,24 @@ body {
     font-size: 28px;
     color: #f1c40f;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* Perbesar tombol Update Data Diri */
+#showFormButton {
+    padding: 15px 30px;
+    font-size: 20px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: center;
+    display: block;
+    margin: 20px auto;
+}
+
+#showFormButton:hover {
+    background-color: #2980b9;
 }
 
 .profile-info {
@@ -74,8 +95,13 @@ body {
     margin-bottom: 10px;
 }
 
+/* Kotak teks untuk pengisian data umroh */
 .form-data {
     margin: 20px 0;
+    padding: 15px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    border: 1px solid #f39c12;
 }
 
 .form-group {
@@ -105,6 +131,17 @@ body {
 
 .form-group input::placeholder {
     color: #7f8c8d;
+}
+
+/* Teks untuk Update Data Diri */
+#updateSection {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    border: 1px solid #f39c12;
+    color: white;
+    text-align: center;
 }
 
 .submit-button {
@@ -208,6 +245,7 @@ ul li {
     background-color: #c0392b;
 }
 
+/* Tampilan untuk versi mobile, tidak bisa di-zoom */
 @media (max-width: 768px) {
     .profile-photo {
         margin: 0 auto 15px;
@@ -220,5 +258,13 @@ ul li {
     .form-group input,
     .form-group select {
         width: 100%; /* Kolom menyesuaikan layar kecil */
+    }
+
+    /* Atur agar halaman mobile tidak bisa di-zoom */
+    html {
+        touch-action: manipulation;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
     }
 }
