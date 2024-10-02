@@ -24,6 +24,9 @@ telegram_bot_token = "7727363392:AAHwOfj2FTm9a6j30rlEu_iKSMBSZFofm7U"
 telegram_chat_id_personal = "935923063"
 telegram_chat_id_group = "-1002225778614"
 
+# Bot lain untuk meneruskan pesan pembayaran
+second_bot_token = "7536869126:AAH2AaPRXllJ1rZyABjsWDO3vK7Obj1D2v0"
+
 # Direktori untuk menyimpan file yang diunggah
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -351,8 +354,30 @@ def upload_payment():
         send_photo_to_telegram(bukti_pembayaran_path, telegram_chat_id_personal)
         send_photo_to_telegram(bukti_pembayaran_path, telegram_chat_id_group)
 
+        # Teruskan ke bot lain dalam format kwitansi
+        receipt_message = (f"Terima kasih atas pembayaran Anda. Total pembayaran Anda adalah Rp {format_currency(total_pembayaran)}.\n"
+                           f"/send {session['email']}")
+        send_message_to_bot(receipt_message)
+
         flash("Bukti pembayaran berhasil diunggah dan dikirim ke Telegram!")
         return redirect(url_for("profile"))
+
+# Fungsi untuk mengirim pesan ke bot lain
+def send_message_to_bot(message):
+    url = f"https://api.telegram.org/bot{second_bot_token}/sendMessage"
+    data = {
+        "chat_id": telegram_chat_id_personal,  # Ganti sesuai dengan chat ID tujuan
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    try:
+        response = requests.post(url, data=data)
+        if response.status_code == 200:
+            print("Pesan berhasil dikirim ke bot lain")
+        else:
+            print(f"Gagal mengirim pesan ke bot lain: {response.text}")
+    except Exception as e:
+        print(f"Error saat mengirim pesan ke bot lain: {e}")
 
 # Rute untuk menghapus riwayat pembayaran
 @app.route("/delete_payment/<int:index>", methods=["POST"])
@@ -439,12 +464,3 @@ if __name__ == "__main__":
     if not os.path.exists(UPLOAD_FOLDER):
         os.makedirs(UPLOAD_FOLDER)
     app.run(debug=True)
-
-
-
-# Jalankan aplikasi dengan mode debug
-if __name__ == "__main__":
-    if not os.path.exists(UPLOAD_FOLDER):
-        os.makedirs(UPLOAD_FOLDER)
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
