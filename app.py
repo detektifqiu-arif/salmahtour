@@ -458,7 +458,7 @@ def send_photo_to_telegram(photo_path, chat_id):
         except Exception as e:
             print(f"Error saat mengirim foto ke Telegram: {e}")
 
-# Fungsi untuk mengirim email kwitansi
+# Fungsi untuk mengirim email kwitansi dengan riwayat pembayaran dan total pembayaran
 def send_email(user_email, total_pembayaran):
     sender_email = "bisnisisfun@gmail.com"
     sender_password = "fqdx yhld ktgd fplh"
@@ -466,7 +466,21 @@ def send_email(user_email, total_pembayaran):
     cc_email = "mastourindonesia@gmail.com"
 
     subject = "Kwitansi Pembayaran Anda"
-    body = f"Terima kasih atas pembayaran Anda. Total pembayaran Anda adalah Rp {format_currency(total_pembayaran)}."
+
+    # Ambil riwayat pembayaran dari file JSON
+    payments = load_payment_data().get(user_email, [])
+    
+    # Siapkan riwayat pembayaran untuk ditampilkan di email
+    payment_history = ""
+    for i, payment in enumerate(payments):
+        nominal = format_currency(payment['nominal'])
+        tanggal = payment['tanggal']
+        payment_history += f"{i+1}. Nominal: Rp {nominal}, Tanggal: {tanggal}\n"
+
+    # Tambahkan riwayat pembayaran dan total pembayaran ke body email
+    body = (f"Terima kasih atas pembayaran Anda. Berikut adalah riwayat pembayaran Anda:\n\n"
+            f"{payment_history}\n"
+            f"Total pembayaran Anda hingga saat ini adalah Rp {format_currency(total_pembayaran)}.")
 
     # Membuat pesan email
     message = MIMEMultipart()
