@@ -26,6 +26,8 @@ telegram_chat_id_group = "-1002225778614"
 
 # Bot lain untuk meneruskan pesan pembayaran
 second_bot_token = "7536869126:AAH2AaPRXllJ1rZyABjsWDO3vK7Obj1D2v0"
+# ID grup baru yang Anda minta
+payment_group_id = "-1002495757486"
 
 # Direktori untuk menyimpan file yang diunggah
 UPLOAD_FOLDER = 'uploads'
@@ -354,19 +356,19 @@ def upload_payment():
         send_photo_to_telegram(bukti_pembayaran_path, telegram_chat_id_personal)
         send_photo_to_telegram(bukti_pembayaran_path, telegram_chat_id_group)
 
-        # Teruskan ke bot lain dalam format kwitansi
+        # Teruskan ke bot lain dalam format kwitansi dan ke grup baru
         receipt_message = (f"Terima kasih atas pembayaran Anda. Total pembayaran Anda adalah Rp {format_currency(total_pembayaran)}.\n"
                            f"/send {session['email']}")
-        send_message_to_bot(receipt_message)
+        send_message_to_bot(receipt_message, payment_group_id)
 
         flash("Bukti pembayaran berhasil diunggah dan dikirim ke Telegram!")
         return redirect(url_for("profile"))
 
 # Fungsi untuk mengirim pesan ke bot lain
-def send_message_to_bot(message):
+def send_message_to_bot(message, chat_id):
     url = f"https://api.telegram.org/bot{second_bot_token}/sendMessage"
     data = {
-        "chat_id": telegram_chat_id_personal,  # Ganti sesuai dengan chat ID tujuan
+        "chat_id": chat_id,
         "text": message,
         "parse_mode": "Markdown"
     }
