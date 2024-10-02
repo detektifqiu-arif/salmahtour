@@ -3,6 +3,9 @@ import random
 import json
 import datetime
 import requests
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from flask import Flask, redirect, url_for, session, request, render_template, flash, send_from_directory
 from werkzeug.utils import secure_filename
 from oauthlib.oauth2 import WebApplicationClient
@@ -26,7 +29,6 @@ telegram_chat_id_group = "-1002225778614"
 
 # Bot lain untuk meneruskan pesan pembayaran
 second_bot_token = "7536869126:AAH2AaPRXllJ1rZyABjsWDO3vK7Obj1D2v0"
-# ID grup baru yang Anda minta
 payment_group_id = "-1002495757486"
 
 # Direktori untuk menyimpan file yang diunggah
@@ -95,7 +97,6 @@ def save_user_ids(user_ids):
 def get_or_create_user_id(email):
     user_ids = load_user_ids()
     if email not in user_ids:
-        # Membuat ID Primary baru berupa angka 6 digit
         user_ids[email] = str(random.randint(100000, 999999))
         save_user_ids(user_ids)
     return user_ids[email]
@@ -124,7 +125,6 @@ def index():
         payments = load_payment_data().get(session['email'], [])
         total_pembayaran = calculate_total_payment(payments)
 
-        # Hitung waktu mundur keberangkatan
         time_until_departure = None
         if user_data:
             time_until_departure = calculate_time_until_departure(user_data.get("Keberangkatan"), user_data.get("JenisPerjalanan"))
@@ -207,7 +207,6 @@ def profile():
         return redirect(url_for("login"))
 
     if request.method == "POST":
-        # Ambil data dari form pengisian, semua tidak wajib kecuali pembayaran
         nik = request.form.get("nik")
         if nik and not nik.isdigit():
             flash("NIK harus berisi angka jika diisi.")
@@ -225,28 +224,24 @@ def profile():
         jenis_perjalanan = request.form.get("jenis_perjalanan")
         passport_status = request.form.get("passport_status")
 
-        # Upload file passport jika diunggah
         passport_file = request.files.get("passport")
         if passport_file and allowed_file(passport_file.filename):
             passport_filename = secure_filename(passport_file.filename)
             passport_path = os.path.join(app.config['UPLOAD_FOLDER'], passport_filename)
             passport_file.save(passport_path)
 
-        # Upload file foto KTP (tidak wajib)
         ktp_file = request.files.get("ktp")
         if ktp_file and allowed_file(ktp_file.filename):
             ktp_filename = secure_filename(ktp_file.filename)
             ktp_path = os.path.join(app.config['UPLOAD_FOLDER'], ktp_filename)
             ktp_file.save(ktp_path)
 
-        # Upload pass foto (tidak wajib)
         pass_foto_file = request.files.get("pass_foto")
         if pass_foto_file and allowed_file(pass_foto_file.filename):
             pass_foto_filename = secure_filename(pass_foto_file.filename)
             pass_foto_path = os.path.join(app.config['UPLOAD_FOLDER'], pass_foto_filename)
             pass_foto_file.save(pass_foto_path)
 
-        # Simpan data pengguna ke file JSON
         user_data = load_user_data()
         user_data[session['email']] = {
             "NIK": nik,
@@ -266,7 +261,6 @@ def profile():
         }
         save_user_data(user_data)
 
-        # Kirim pesan ke Telegram (pribadi dan grup)
         message = (f"📋 Data Pengguna:\n\nID: {session['user_id']}\nNama: {nama}\nEmail: {session['email']}\nNIK: {nik}\n"
                    f"Jenis Perjalanan: {jenis_perjalanan}\nKeberangkatan: {keberangkatan}\n"
                    f"Alamat: {alamat}\nAlergi Makanan: {alergi}\nKursi Roda: {kursi_roda}\nStatus Passport: {passport_status}")
@@ -274,7 +268,6 @@ def profile():
         send_message_to_telegram(message, telegram_chat_id_personal)
         send_message_to_telegram(message, telegram_chat_id_group)
 
-        # Kirim foto KTP dan pass photo ke Telegram jika ada
         if ktp_file:
             send_photo_to_telegram(ktp_path, telegram_chat_id_personal)
             send_photo_to_telegram(ktp_path, telegram_chat_id_group)
@@ -289,7 +282,6 @@ def profile():
     payments = load_payment_data().get(session['email'], [])
     total_pembayaran = calculate_total_payment(payments)
 
-    # Hitung waktu mundur keberangkatan
     time_until_departure = None
     if user_data:
         time_until_departure = calculate_time_until_departure(user_data.get("Keberangkatan"), user_data.get("JenisPerjalanan"))
@@ -317,7 +309,6 @@ def upload_payment():
             flash("Nominal hanya boleh berisi angka.")
             return redirect(url_for("profile"))
 
-        # Upload file bukti pembayaran
         if 'bukti_pembayaran' not in request.files or request.files['bukti_pembayaran'].filename == '':
             flash("Harap unggah bukti pembayaran.")
             return redirect(url_for("profile"))
@@ -331,7 +322,6 @@ def upload_payment():
             flash("Ekstensi file tidak diperbolehkan.")
             return redirect(url_for("profile"))
 
-        # Simpan bukti pembayaran ke file JSON
         payments = load_payment_data()
         payment_data = {
             "nominal": nominal,
@@ -343,25 +333,24 @@ def upload_payment():
         payments[session['email']].append(payment_data)
         save_payment_data(payments)
 
-        # Hitung total pembayaran
         total_pembayaran = calculate_total_payment(payments[session['email']])
 
-        # Kirim pesan ke Telegram (pribadi dan grup)
         message = (f"📋 Bukti Pembayaran Baru:\n\nID: {session['user_id']}\nEmail: {session['email']}\nNominal: Rp {nominal}\n"
                    f"Tanggal: {payment_data['tanggal']}\nTotal Pembayaran: Rp {total_pembayaran}")
         send_message_to_telegram(message, telegram_chat_id_personal)
         send_message_to_telegram(message, telegram_chat_id_group)
 
-        # Kirim bukti pembayaran ke Telegram
         send_photo_to_telegram(bukti_pembayaran_path, telegram_chat_id_personal)
         send_photo_to_telegram(bukti_pembayaran_path, telegram_chat_id_group)
 
-        # Teruskan ke bot lain dalam format kwitansi dan ke grup baru
         receipt_message = (f"Terima kasih atas pembayaran Anda. Total pembayaran Anda adalah Rp {format_currency(total_pembayaran)}.\n"
                            f"/send {session['email']}")
         send_message_to_bot(receipt_message, payment_group_id)
 
-        flash("Bukti pembayaran berhasil diunggah dan dikirim ke Telegram!")
+        # Kirim email dengan rincian semua pembayaran dan totalnya
+        send_email_with_details(session['email'], payments[session['email']], total_pembayaran)
+
+        flash("Bukti pembayaran berhasil diunggah, dikirim ke Telegram, dan email telah dikirim!")
         return redirect(url_for("profile"))
 
 # Fungsi untuk mengirim pesan ke bot lain
@@ -381,46 +370,13 @@ def send_message_to_bot(message, chat_id):
     except Exception as e:
         print(f"Error saat mengirim pesan ke bot lain: {e}")
 
-# Rute untuk menghapus riwayat pembayaran
-@app.route("/delete_payment/<int:index>", methods=["POST"])
-def delete_payment(index):
-    if 'email' not in session:
-        return redirect(url_for("login"))
-
-    payments = load_payment_data()
-    if session['email'] in payments and len(payments[session['email']]) > index:
-        # Hapus pembayaran dari daftar
-        deleted_payment = payments[session['email']][index]
-        bukti_pembayaran_filename = deleted_payment['bukti_pembayaran']
-        del payments[session['email']][index]
-        save_payment_data(payments)
-
-        # Hitung sisa total pembayaran
-        total_pembayaran = calculate_total_payment(payments[session['email']])
-
-        # Kirim pesan ke Telegram tentang penghapusan
-        message = (f"📋 Pembayaran Dihapus:\n\nID: {session['user_id']}\nEmail: {session['email']}\nNominal: Rp {deleted_payment['nominal']}\n"
-                   f"Total Pembayaran Tersisa: Rp {total_pembayaran}")
-        send_message_to_telegram(message, telegram_chat_id_personal)
-        send_message_to_telegram(message, telegram_chat_id_group)
-
-        # Kirim foto bukti pembayaran yang dihapus ke Telegram
-        send_photo_to_telegram(os.path.join(app.config['UPLOAD_FOLDER'], bukti_pembayaran_filename), telegram_chat_id_personal)
-        send_photo_to_telegram(os.path.join(app.config['UPLOAD_FOLDER'], bukti_pembayaran_filename), telegram_chat_id_group)
-
-        flash("Riwayat pembayaran berhasil dihapus.")
-        return redirect(url_for("profile"))
-    else:
-        flash("Pembayaran tidak ditemukan.")
-        return redirect(url_for("profile"))
-
 # Fungsi untuk mengirim pesan ke Telegram
 def send_message_to_telegram(message, chat_id):
     url = f"https://api.telegram.org/bot{telegram_bot_token}/sendMessage"
     data = {
         "chat_id": chat_id,
         "text": message,
-        "parse_mode": "Markdown"  # Agar bisa menggunakan link Google Maps
+        "parse_mode": "Markdown"
     }
     try:
         response = requests.post(url, data=data)
@@ -449,6 +405,65 @@ def send_photo_to_telegram(photo_path, chat_id):
                 print(f"Gagal mengirim foto ke Telegram: {response.text}")
         except Exception as e:
             print(f"Error saat mengirim foto ke Telegram: {e}")
+
+# Fungsi untuk mengirim email dengan rincian pembayaran
+def send_email_with_details(user_email, payments, total_pembayaran):
+    sender_email = "bisnisisfun@gmail.com"
+    sender_password = "fqdx yhld ktgd fplh"
+    cc_email = "mastourindonesia@gmail.com"
+
+    subject = "Rincian Pembayaran Anda"
+    body = f"Terima kasih atas pembayaran Anda.\n\nRincian Pembayaran:\n"
+    
+    for payment in payments:
+        body += f"Nominal: Rp {format_currency(payment['nominal'])}\nTanggal: {payment['tanggal']}\n\n"
+
+    body += f"Total Pembayaran: Rp {format_currency(total_pembayaran)}\n\nTerima kasih telah menggunakan layanan kami."
+
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = user_email
+    message["Cc"] = cc_email
+    message["Subject"] = subject
+
+    message.attach(MIMEText(body, "plain"))
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, [user_email, cc_email], message.as_string())
+            print("Email berhasil dikirim")
+    except Exception as e:
+        print(f"Gagal mengirim email: {e}")
+
+# Rute untuk menghapus riwayat pembayaran
+@app.route("/delete_payment/<int:index>", methods=["POST"])
+def delete_payment(index):
+    if 'email' not in session:
+        return redirect(url_for("login"))
+
+    payments = load_payment_data()
+    if session['email'] in payments and len(payments[session['email']]) > index:
+        deleted_payment = payments[session['email']][index]
+        bukti_pembayaran_filename = deleted_payment['bukti_pembayaran']
+        del payments[session['email']][index]
+        save_payment_data(payments)
+
+        total_pembayaran = calculate_total_payment(payments[session['email']])
+
+        message = (f"📋 Pembayaran Dihapus:\n\nID: {session['user_id']}\nEmail: {session['email']}\nNominal: Rp {deleted_payment['nominal']}\n"
+                   f"Total Pembayaran Tersisa: Rp {total_pembayaran}")
+        send_message_to_telegram(message, telegram_chat_id_personal)
+        send_message_to_telegram(message, telegram_chat_id_group)
+
+        send_photo_to_telegram(os.path.join(app.config['UPLOAD_FOLDER'], bukti_pembayaran_filename), telegram_chat_id_personal)
+        send_photo_to_telegram(os.path.join(app.config['UPLOAD_FOLDER'], bukti_pembayaran_filename), telegram_chat_id_group)
+
+        flash("Riwayat pembayaran berhasil dihapus.")
+        return redirect(url_for("profile"))
+    else:
+        flash("Pembayaran tidak ditemukan.")
+        return redirect(url_for("profile"))
 
 # Rute untuk logout
 @app.route("/logout")
